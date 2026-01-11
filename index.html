@@ -316,6 +316,9 @@
             const CalendarView = () => {
                 const [currentDate, setCurrentDate] = React.useState(new Date().toISOString().slice(0, 10));
                 const [viewMonth, setViewMonth] = React.useState(selectedMonth);
+                
+                // 입력창 제어를 위한 Ref 생성
+                const inputRef = React.useRef(null);
 
                 React.useEffect(() => { setViewMonth(selectedMonth); }, [selectedMonth]);
 
@@ -324,7 +327,7 @@
                 const [isNight, setIsNight] = React.useState(false);
                 const [isHoliday, setIsHoliday] = React.useState(false);
 
-                // Load existing data for the selected date
+                // 날짜가 변경되면 입력창에 포커스를 줘서 키패드를 띄움
                 React.useEffect(() => {
                     const existing = workLogs.find(l => l.empId === selectedEmpId && l.date === currentDate);
                     if (existing) {
@@ -338,7 +341,36 @@
                         setIsNight(false);
                         setIsHoliday(false);
                     }
-                }, [currentDate, selectedEmpId, workLogs]); // Depend on workLogs to reflect updates
+                    
+                    // 날짜 변경 시 입력창으로 포커스 이동 (키패드 활성화)
+                    if (inputRef.current) {
+                        inputRef.current.focus();
+                    }
+                }, [currentDate, selectedEmpId, workLogs]);
+
+                // 다음 날짜로 이동하는 함수
+                const moveToNextDay = () => {
+                    const curr = new Date(currentDate);
+                    curr.setDate(curr.getDate() + 1);
+                    const nextDate = curr.toISOString().slice(0, 10);
+                    
+                    // 달이 바뀌면 달력 뷰도 업데이트
+                    const nextMonth = nextDate.slice(0, 7);
+                    if (nextMonth !== viewMonth) {
+                        setViewMonth(nextMonth);
+                        setSelectedMonth(nextMonth);
+                    }
+                    
+                    setCurrentDate(nextDate);
+                };
+
+                // 엔터키 입력 시 처리
+                const handleKeyDown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // 기본 동작 방지
+                        moveToNextDay();
+                    }
+                };
 
                 // Auto-save function
                 const updateLog = (updates) => {
@@ -532,10 +564,15 @@
                                     </div>
                                     <div className="relative">
                                         <input 
+                                            ref={inputRef}
                                             type="number" 
+                                            inputMode="decimal"
+                                            step="0.1"
                                             placeholder="직접 입력 (예: 8.5)" 
                                             value={hours} 
                                             onChange={(e) => handleHourChange(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            onFocus={(e) => e.target.select()} 
                                             className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-lg font-bold text-gray-800"
                                         />
                                         <span className="absolute right-4 top-3.5 text-gray-400 text-sm">시간</span>
@@ -565,6 +602,8 @@
                                                 <div className="relative flex-1">
                                                     <input 
                                                         type="number" 
+                                                        inputMode="decimal"
+                                                        step="0.1"
                                                         placeholder="야간 시간만 (예: 2)" 
                                                         value={nightHours} 
                                                         onChange={(e) => handleNightHourChange(e.target.value)}
