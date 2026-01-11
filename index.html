@@ -59,9 +59,7 @@
         const List = (p) => <IconBase {...p}><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></IconBase>;
         const Send = (p) => <IconBase {...p}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconBase>;
         const BookOpen = (p) => <IconBase {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></IconBase>;
-        const Fuel = (p) => <IconBase {...p}><path d="M3 22v-8a2 2 0 0 1 2-2h2.5"/><path d="M11.5 14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v8Z"/><path d="M13 2a2 2 0 0 1 2 2v2h-4V4a2 2 0 0 1 2-2Z"/><path d="M14 13.5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"/><path d="M7 12h2"/></IconBase>;
-        const CheckCircle = (p) => <IconBase {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>;
-        const AlertCircle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>;
+        const RotateCcw = (p) => <IconBase {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></IconBase>;
 
         // --- Constants ---
         const CONSTANTS = {
@@ -135,7 +133,7 @@
 
             const [isSmallBusiness, setIsSmallBusiness] = React.useState(() => {
                 const saved = localStorage.getItem('gas_station_isSmallBusiness');
-                return saved ? JSON.parse(saved) : false;
+                return saved ? JSON.parse(saved) : true;
             });
 
             const [selectedMonth, setSelectedMonth] = React.useState(new Date().toISOString().slice(0, 7));
@@ -326,6 +324,7 @@
                 const [isNight, setIsNight] = React.useState(false);
                 const [isHoliday, setIsHoliday] = React.useState(false);
 
+                // Load existing data for the selected date
                 React.useEffect(() => {
                     const existing = workLogs.find(l => l.empId === selectedEmpId && l.date === currentDate);
                     if (existing) {
@@ -339,42 +338,71 @@
                         setIsNight(false);
                         setIsHoliday(false);
                     }
-                }, [currentDate, selectedEmpId, workLogs]);
+                }, [currentDate, selectedEmpId, workLogs]); // Depend on workLogs to reflect updates
 
-                const saveLog = () => {
+                // Auto-save function
+                const updateLog = (updates) => {
                     if (!selectedEmpId) { alert('직원을 먼저 선택해주세요.'); return; }
-                    if (!hours) { alert('총 근무 시간을 입력해주세요.'); return; }
-
-                    const h = parseFloat(hours);
-                    const nh = parseFloat(nightHours) || 0;
-
-                    if (!isSmallBusiness && nh > h) { alert('야간 근무 시간은 총 근무 시간보다 클 수 없습니다.'); return; }
-
+                    
                     const newLog = {
                         empId: selectedEmpId,
                         date: currentDate,
-                        hours: h,
-                        nightHours: !isSmallBusiness ? nh : 0,
-                        isNight: isSmallBusiness ? isNight : (nh > 0),
-                        isHoliday,
+                        hours: updates.hours !== undefined ? parseFloat(updates.hours) : (parseFloat(hours) || 0),
+                        nightHours: !isSmallBusiness ? (updates.nightHours !== undefined ? parseFloat(updates.nightHours) : (parseFloat(nightHours) || 0)) : 0,
+                        isNight: isSmallBusiness ? (updates.isNight !== undefined ? updates.isNight : isNight) : (updates.nightHours > 0),
+                        isHoliday: updates.isHoliday !== undefined ? updates.isHoliday : isHoliday,
                         updatedAt: new Date().toISOString()
                     };
 
                     const existingIndex = workLogs.findIndex(l => l.empId === selectedEmpId && l.date === currentDate);
+                    let updatedLogs;
+                    
                     if (existingIndex >= 0) {
-                        const updatedLogs = [...workLogs];
+                        updatedLogs = [...workLogs];
                         updatedLogs[existingIndex] = newLog;
-                        setWorkLogs(updatedLogs);
                     } else {
-                        setWorkLogs([...workLogs, newLog]);
+                        updatedLogs = [...workLogs, newLog];
                     }
-                    alert('저장되었습니다.');
+                    
+                    if (newLog.hours === 0 && !newLog.isHoliday && !newLog.isNight && !newLog.nightHours) {
+                         updatedLogs = workLogs.filter(l => !(l.empId === selectedEmpId && l.date === currentDate));
+                    }
+
+                    setWorkLogs(updatedLogs);
+                };
+
+                const handleHourChange = (val) => {
+                    setHours(val);
+                    updateLog({ hours: val });
+                };
+
+                const handleNightHourChange = (val) => {
+                    setNightHours(val);
+                    updateLog({ nightHours: val });
+                };
+
+                const toggleIsNight = () => {
+                    const newVal = !isNight;
+                    setIsNight(newVal);
+                    updateLog({ isNight: newVal });
+                };
+
+                const toggleIsHoliday = () => {
+                    const newVal = !isHoliday;
+                    setIsHoliday(newVal);
+                    updateLog({ isHoliday: newVal });
                 };
 
                 const deleteLog = () => {
                     if (!selectedEmpId) return;
                     setWorkLogs(workLogs.filter(l => !(l.empId === selectedEmpId && l.date === currentDate)));
                     setHours(''); setNightHours(''); setIsNight(false); setIsHoliday(false);
+                };
+
+                const resetMonth = () => {
+                    if(!confirm(`${viewMonth}월의 모든 기록을 삭제하시겠습니까?`)) return;
+                    setWorkLogs(workLogs.filter(l => !(l.empId === selectedEmpId && l.date.startsWith(viewMonth))));
+                    alert('초기화되었습니다.');
                 };
 
                 const calendarDays = React.useMemo(() => {
@@ -428,10 +456,15 @@
 
                         <Card className="p-4">
                             <div className="flex justify-between items-end mb-4">
-                                <h3 className="font-bold text-gray-700">근무 달력 (입력)</h3>
-                                <span className="text-sm text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded">
-                                    총 {monthlyTotalHours}시간
-                                </span>
+                                <h3 className="font-bold text-gray-700">근무 달력</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={resetMonth} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100 flex items-center gap-1">
+                                        <RotateCcw size={12}/> 초기화
+                                    </button>
+                                    <span className="text-sm text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded">
+                                        총 {monthlyTotalHours}시간
+                                    </span>
+                                </div>
                             </div>
                             
                             <div className="grid grid-cols-7 text-center mb-2">
@@ -489,21 +522,21 @@
 
                             <div className="space-y-4">
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-bold text-gray-500">총 근무 시간</label>
+                                    <label className="text-xs font-bold text-gray-500">총 근무 시간 (터치시 자동저장)</label>
                                     <div className="flex gap-2">
                                         {[4, 5, 6, 7, 8].map(h => (
-                                            <button key={h} onClick={() => setHours(h)} className={`flex-1 py-2 rounded-md text-sm border font-medium transition-colors ${parseFloat(hours) === h ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                                                {h}
+                                            <button key={h} onClick={() => handleHourChange(h)} className={`flex-1 py-3 rounded-xl text-sm border font-medium transition-colors ${parseFloat(hours) === h ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                                                {h}시간
                                             </button>
                                         ))}
                                     </div>
                                     <div className="relative">
                                         <input 
                                             type="number" 
-                                            placeholder="총 시간 (예: 8)" 
+                                            placeholder="직접 입력 (예: 8.5)" 
                                             value={hours} 
-                                            onChange={(e) => setHours(e.target.value)}
-                                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                            onChange={(e) => handleHourChange(e.target.value)}
+                                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-lg font-bold text-gray-800"
                                         />
                                         <span className="absolute right-4 top-3.5 text-gray-400 text-sm">시간</span>
                                     </div>
@@ -512,12 +545,12 @@
                                 {isSmallBusiness ? (
                                     <div className="flex gap-3 pt-2">
                                         <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isNight ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                            <input type="checkbox" checked={isNight} onChange={(e) => setIsNight(e.target.checked)} className="hidden" />
+                                            <input type="checkbox" checked={isNight} onChange={toggleIsNight} className="hidden" />
                                             <Moon size={16} />
                                             <span className="font-bold text-sm">야간</span>
                                         </label>
                                         <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                            <input type="checkbox" checked={isHoliday} onChange={(e) => setIsHoliday(e.target.checked)} className="hidden" />
+                                            <input type="checkbox" checked={isHoliday} onChange={toggleIsHoliday} className="hidden" />
                                             <Gift size={16} />
                                             <span className="font-bold text-sm">휴일</span>
                                         </label>
@@ -534,18 +567,18 @@
                                                         type="number" 
                                                         placeholder="야간 시간만 (예: 2)" 
                                                         value={nightHours} 
-                                                        onChange={(e) => setNightHours(e.target.value)}
+                                                        onChange={(e) => handleNightHourChange(e.target.value)}
                                                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:outline-none"
                                                     />
                                                     <span className="absolute right-4 top-3.5 text-gray-400 text-sm">시간</span>
                                                 </div>
-                                                <button onClick={() => setNightHours(Math.min(parseFloat(hours) || 0, 1))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">1H</button>
-                                                <button onClick={() => setNightHours(Math.min(parseFloat(hours) || 0, 2))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">2H</button>
+                                                <button onClick={() => handleNightHourChange(Math.min(parseFloat(hours) || 0, 1))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">1H</button>
+                                                <button onClick={() => handleNightHourChange(Math.min(parseFloat(hours) || 0, 2))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">2H</button>
                                             </div>
                                         </div>
                                         <div className="flex gap-3">
                                             <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                                <input type="checkbox" checked={isHoliday} onChange={(e) => setIsHoliday(e.target.checked)} className="hidden" />
+                                                <input type="checkbox" checked={isHoliday} onChange={toggleIsHoliday} className="hidden" />
                                                 <Gift size={16} />
                                                 <span className="font-bold text-sm">휴일 (1.5배)</span>
                                             </label>
@@ -554,20 +587,16 @@
                                 )}
                             </div>
 
-                            <div className="flex gap-2">
-                                <Button onClick={saveLog} className="flex-1 py-3 text-lg shadow-indigo-200">
-                                    <Save size={18} />
-                                    저장
-                                </Button>
+                            {hasLog && (
                                 <Button 
                                     onClick={deleteLog} 
                                     variant="danger" 
-                                    className={`w-1/3 py-3 text-lg shadow-red-200 bg-red-50 text-red-500 border-red-100 hover:bg-red-100 transition-opacity ${!hasLog && !hours ? 'opacity-50 pointer-events-none' : ''}`}
+                                    className="w-full py-3 text-lg shadow-red-200 bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
                                 >
                                     <Trash2 size={18} />
-                                    삭제
+                                    이 날짜 기록 삭제
                                 </Button>
-                            </div>
+                            )}
                         </Card>
                     </div>
                 );
@@ -932,9 +961,9 @@
                                 <p><strong>[달력]</strong> 탭에서 매일의 근무를 기록합니다.</p>
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li>달력에서 날짜를 선택합니다.</li>
-                                    <li><strong>총 근무 시간</strong>을 입력합니다. (휴게시간 제외)</li>
-                                    <li><strong>5인 이상 사업장</strong>인 경우, 야간(22:00~06:00) 근무 시간을 별도로 입력하면 자동으로 가산수당이 계산됩니다.</li>
-                                    <li>입력 후 <strong>[저장]</strong> 버튼을 꼭 눌러주세요.</li>
+                                    <li><strong>4시간, 8시간</strong> 등 빠른 입력 버튼을 누르면 즉시 저장됩니다.</li>
+                                    <li>직접 시간을 입력할 경우, 숫자를 입력하는 순간 <strong>자동으로 저장</strong>됩니다. (별도의 저장 버튼이 없습니다.)</li>
+                                    <li><strong>[초기화]</strong> 버튼을 누르면 해당 월의 모든 기록을 삭제할 수 있습니다.</li>
                                 </ul>
                             </div>
                         </Card>
@@ -989,16 +1018,19 @@
 
             return (
                 <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden font-sans text-gray-900 print:shadow-none print:max-w-none print:overflow-visible">
-                    <header className="bg-white border-b border-gray-200 px-5 py-4 sticky top-0 z-10 flex items-center gap-4 shadow-sm print:hidden">
-                        <div className="bg-blue-600 p-3 rounded-2xl shadow-md shrink-0 flex items-center justify-center">
-                            <Fuel size={32} className="text-white" strokeWidth={1.5} />
-                        </div>
-                        <div className="flex flex-col">
-                            <h1 className="font-bold text-lg text-gray-900 leading-none mb-1 tracking-tight">
+                    <header className="relative w-full h-40 bg-gray-800 sticky top-0 z-20 shadow-md print:hidden overflow-hidden">
+                        <img 
+                            src="https://images.unsplash.com/photo-1527018601619-a508a2be00cd?auto=format&fit=crop&w=800&q=80" 
+                            alt="Gas Station Background" 
+                            className="absolute inset-0 w-full h-full object-cover opacity-70"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                        <div className="absolute bottom-0 left-0 w-full p-5">
+                            <h1 className="text-xl font-bold text-white mb-1 drop-shadow-md">
                                 (사)한국주유소협회 경기도회
                             </h1>
                             <div className="flex items-center gap-2">
-                                <span className="text-sm font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                <span className="text-xs font-bold text-white bg-blue-600 px-2 py-1 rounded shadow-sm">
                                     간단 월급계산기 V2
                                 </span>
                             </div>
