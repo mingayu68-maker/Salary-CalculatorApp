@@ -61,6 +61,8 @@
         const BookOpen = (p) => <IconBase {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></IconBase>;
         const Fuel = (p) => <IconBase {...p}><path d="M3 22v-8a2 2 0 0 1 2-2h2.5"/><path d="M11.5 14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v8Z"/><path d="M13 2a2 2 0 0 1 2 2v2h-4V4a2 2 0 0 1 2-2Z"/><path d="M14 13.5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"/><path d="M7 12h2"/></IconBase>;
         const RotateCcw = (p) => <IconBase {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></IconBase>;
+        const ChevronLeft = (p) => <IconBase {...p}><polyline points="15 18 9 12 15 6" /></IconBase>;
+        const Sun = (p) => <IconBase {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41-1.41"/><path d="m19.07 4.93-1.41 1.41"/></IconBase>;
 
         // --- Constants ---
         const CONSTANTS = {
@@ -317,47 +319,62 @@
             const CalendarView = () => {
                 const [currentDate, setCurrentDate] = React.useState(new Date().toISOString().slice(0, 10));
                 const [viewMonth, setViewMonth] = React.useState(selectedMonth);
-                
-                // 입력창 제어를 위한 Ref 생성
+                const [isInputMode, setIsInputMode] = React.useState(false);
                 const inputRef = React.useRef(null);
+                
+                // Separate inputs for 5+ mode
+                const [dayInput, setDayInput] = React.useState('');
+                const [nightInput, setNightInput] = React.useState('');
 
-                React.useEffect(() => { setViewMonth(selectedMonth); }, [selectedMonth]);
-
+                // Original states for 5- mode and data persistence
                 const [hours, setHours] = React.useState('');
                 const [nightHours, setNightHours] = React.useState('');
                 const [isNight, setIsNight] = React.useState(false);
                 const [isHoliday, setIsHoliday] = React.useState(false);
 
-                // 날짜가 변경되면 입력창에 포커스를 줘서 키패드를 띄움
+                React.useEffect(() => { setViewMonth(selectedMonth); }, [selectedMonth]);
+
+                // Load existing data for the selected date
                 React.useEffect(() => {
                     const existing = workLogs.find(l => l.empId === selectedEmpId && l.date === currentDate);
+                    
                     if (existing) {
-                        setHours(existing.hours);
-                        setNightHours(existing.nightHours || '');
+                        const total = existing.hours || 0;
+                        const night = existing.nightHours || 0;
+                        
+                        setHours(total);
+                        setNightHours(night);
                         setIsNight(existing.isNight || false);
                         setIsHoliday(existing.isHoliday);
+
+                        // Set separated inputs
+                        if (!isSmallBusiness) {
+                            const dayPart = parseFloat((total - night).toFixed(1));
+                            setDayInput(dayPart === 0 ? '' : dayPart);
+                            setNightInput(night === 0 ? '' : night);
+                        }
                     } else {
                         setHours('');
                         setNightHours('');
                         setIsNight(false);
                         setIsHoliday(false);
+                        setDayInput('');
+                        setNightInput('');
                     }
-                    
-                    // 날짜 변경 시 입력창으로 포커스 이동 (키패드 활성화)
-                    if (inputRef.current) {
-                        inputRef.current.focus();
-                    }
-                }, [currentDate, selectedEmpId, workLogs]);
 
-                // 엔터키 입력 시 처리 (수정됨: 키패드 닫기)
+                    if (isInputMode && inputRef.current) {
+                        setTimeout(() => inputRef.current.focus(), 50);
+                    }
+                }, [currentDate, selectedEmpId, workLogs, isInputMode, isSmallBusiness]);
+
                 const handleKeyDown = (e) => {
                     if (e.key === 'Enter') {
-                        e.preventDefault(); // 기본 동작 방지
-                        e.target.blur(); // 키패드 닫기
+                        e.preventDefault(); 
+                        e.target.blur();
+                        setIsInputMode(false);
                     }
                 };
 
-                // Auto-save function
                 const updateLog = (updates) => {
                     if (!selectedEmpId) { alert('직원을 먼저 선택해주세요.'); return; }
                     
@@ -388,15 +405,12 @@
                     setWorkLogs(updatedLogs);
                 };
 
+                // Handlers for 5- mode
                 const handleHourChange = (val) => {
                     setHours(val);
                     updateLog({ hours: val });
                 };
-
-                const handleNightHourChange = (val) => {
-                    setNightHours(val);
-                    updateLog({ nightHours: val });
-                };
+                // Night hour change for 5- mode is not really used (only toggle), but keeping logic safe
 
                 const toggleIsNight = () => {
                     const newVal = !isNight;
@@ -410,16 +424,42 @@
                     updateLog({ isHoliday: newVal });
                 };
 
+                // Handlers for 5+ mode (Separated Inputs)
+                const handleDayInputChange = (val) => {
+                    setDayInput(val);
+                    const d = parseFloat(val) || 0;
+                    const n = parseFloat(nightInput) || 0;
+                    // Total = Day + Night
+                    updateLog({ hours: (d + n).toFixed(1), nightHours: n });
+                };
+
+                const handleNightInputChange = (val) => {
+                    setNightInput(val);
+                    const d = parseFloat(dayInput) || 0;
+                    const n = parseFloat(val) || 0;
+                    // Total = Day + Night
+                    updateLog({ hours: (d + n).toFixed(1), nightHours: n });
+                };
+
+
                 const deleteLog = () => {
                     if (!selectedEmpId) return;
                     setWorkLogs(workLogs.filter(l => !(l.empId === selectedEmpId && l.date === currentDate)));
                     setHours(''); setNightHours(''); setIsNight(false); setIsHoliday(false);
+                    setDayInput(''); setNightInput('');
                 };
 
                 const resetMonth = () => {
                     if(!confirm(`${viewMonth}월의 모든 기록을 삭제하시겠습니까?`)) return;
                     setWorkLogs(workLogs.filter(l => !(l.empId === selectedEmpId && l.date.startsWith(viewMonth))));
                     alert('초기화되었습니다.');
+                };
+
+                const handleDayClick = (day) => {
+                    if(!day) return;
+                    const dateStr = `${viewMonth}-${String(day).padStart(2, '0')}`;
+                    setCurrentDate(dateStr);
+                    setIsInputMode(true);
                 };
 
                 const calendarDays = React.useMemo(() => {
@@ -445,184 +485,240 @@
 
                 const hasLog = workLogs.some(l => l.empId === selectedEmpId && l.date === currentDate);
 
+                // Total display for 5+ mode
+                const totalHoursDisplay = (parseFloat(dayInput) || 0) + (parseFloat(nightInput) || 0);
+
                 return (
                     <div className="space-y-4 p-4 pb-24 bg-gray-50 min-h-screen">
-                        <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm">
-                            <input 
-                                type="month" 
-                                value={viewMonth} 
-                                onChange={(e) => {
-                                    setViewMonth(e.target.value);
-                                    setSelectedMonth(e.target.value);
-                                }}
-                                className="font-bold text-lg bg-transparent border-none focus:ring-0 text-gray-800"
-                            />
-                            <div className="flex items-center gap-2">
-                                {isSmallBusiness && <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-bold">5인미만</span>}
-                                {!isSmallBusiness && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">5인이상</span>}
-                                <select 
-                                    className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg p-2"
-                                    value={selectedEmpId}
-                                    onChange={(e) => setSelectedEmpId(e.target.value)}
-                                >
-                                    {employees.length === 0 && <option>직원 등록 필요</option>}
-                                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        <Card className="p-4">
-                            <div className="flex justify-between items-end mb-4">
-                                <h3 className="font-bold text-gray-700">근무 달력</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={resetMonth} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100 flex items-center gap-1">
-                                        <RotateCcw size={12}/> 초기화
-                                    </button>
-                                    <span className="text-sm text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded">
-                                        총 {monthlyTotalHours}시간
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-7 text-center mb-2">
-                                {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
-                                    <div key={d} className={`text-xs font-medium ${i === 0 ? 'text-red-400' : 'text-gray-400'}`}>{d}</div>
-                                ))}
-                            </div>
-
-                            <div className="grid grid-cols-7 gap-1">
-                                {calendarDays.map((day, idx) => {
-                                    const log = getLogForDay(day);
-                                    const dateStr = day ? `${viewMonth}-${String(day).padStart(2, '0')}` : '';
-                                    const isSelected = dateStr === currentDate;
-                                    
-                                    return (
-                                        <div 
-                                            key={idx} 
-                                            onClick={() => day && setCurrentDate(dateStr)}
-                                            className={`
-                                                aspect-square rounded-lg flex flex-col items-center justify-start pt-1 relative border transition-all
-                                                ${!day ? 'invisible border-none' : 'cursor-pointer'}
-                                                ${isSelected ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500 z-10' : 'border-gray-100 bg-white hover:border-indigo-200'}
-                                            `}
+                        
+                        {!isInputMode && (
+                            <>
+                                <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm">
+                                    <input 
+                                        type="month" 
+                                        value={viewMonth} 
+                                        onChange={(e) => {
+                                            setViewMonth(e.target.value);
+                                            setSelectedMonth(e.target.value);
+                                        }}
+                                        className="font-bold text-lg bg-transparent border-none focus:ring-0 text-gray-800"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        {isSmallBusiness && <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-bold">5인미만</span>}
+                                        {!isSmallBusiness && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">5인이상</span>}
+                                        <select 
+                                            className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg p-2"
+                                            value={selectedEmpId}
+                                            onChange={(e) => setSelectedEmpId(e.target.value)}
                                         >
-                                            {day && (
-                                                <>
-                                                    <span className={`text-xs ${idx % 7 === 0 ? 'text-red-400' : 'text-gray-600'}`}>{day}</span>
-                                                    {log && (
-                                                        <div className="mt-1 flex flex-col items-center">
-                                                            <span className="font-bold text-indigo-600 text-sm leading-none">{log.hours}</span>
-                                                            {!isSmallBusiness && log.nightHours > 0 && <span className="text-[9px] text-slate-500 leading-none mt-0.5">야{log.nightHours}</span>}
-                                                            <div className="flex gap-0.5 mt-0.5">
-                                                                {isSmallBusiness && (log.isNight || log.nightHours > 0) && <div className="w-1.5 h-1.5 rounded-full bg-slate-800" title="야간"></div>}
-                                                                {log.isHoliday && <div className="w-1.5 h-1.5 rounded-full bg-red-500" title="휴일"></div>}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </Card>
+                                            {employees.length === 0 && <option>직원 등록 필요</option>}
+                                            {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
 
-                        <Card className="p-4 space-y-4 border-indigo-100 shadow-md">
-                            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-                                <span className="font-bold text-lg text-gray-800">{currentDate}</span>
-                                {hasLog ? (
-                                    <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full font-medium">기록 있음</span>
-                                ) : (
-                                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">미입력</span>
-                                )}
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-bold text-gray-500">총 근무 시간 (터치시 자동저장)</label>
-                                    <div className="flex gap-2">
-                                        {[4, 5, 6, 7, 8].map(h => (
-                                            <button key={h} onClick={() => handleHourChange(h)} className={`flex-1 py-3 rounded-xl text-sm border font-medium transition-colors ${parseFloat(hours) === h ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                                                {h}시간
+                                <Card className="p-4">
+                                    <div className="flex justify-between items-end mb-4">
+                                        <h3 className="font-bold text-gray-700">근무 달력</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={resetMonth} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100 flex items-center gap-1">
+                                                <RotateCcw size={12}/> 초기화
                                             </button>
+                                            <span className="text-sm text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded">
+                                                총 {monthlyTotalHours}시간
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-7 text-center mb-2">
+                                        {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+                                            <div key={d} className={`text-xs font-medium ${i === 0 ? 'text-red-400' : 'text-gray-400'}`}>{d}</div>
                                         ))}
                                     </div>
-                                    <div className="relative">
-                                        <input 
-                                            ref={inputRef}
-                                            type="number" 
-                                            inputMode="decimal"
-                                            step="0.1"
-                                            placeholder="직접 입력 (예: 8.5)" 
-                                            value={hours} 
-                                            onChange={(e) => handleHourChange(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                            onFocus={(e) => e.target.select()} 
-                                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-lg font-bold text-gray-800"
-                                        />
-                                        <span className="absolute right-4 top-3.5 text-gray-400 text-sm">시간</span>
+
+                                    <div className="grid grid-cols-7 gap-1">
+                                        {calendarDays.map((day, idx) => {
+                                            const log = getLogForDay(day);
+                                            const dateStr = day ? `${viewMonth}-${String(day).padStart(2, '0')}` : '';
+                                            const isSelected = dateStr === currentDate;
+                                            
+                                            return (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={() => handleDayClick(day)}
+                                                    className={`
+                                                        aspect-square rounded-lg flex flex-col items-center justify-start pt-1 relative border transition-all
+                                                        ${!day ? 'invisible border-none' : 'cursor-pointer'}
+                                                        ${isSelected ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500 z-10' : 'border-gray-100 bg-white hover:border-indigo-200'}
+                                                    `}
+                                                >
+                                                    {day && (
+                                                        <>
+                                                            <span className={`text-xs ${idx % 7 === 0 ? 'text-red-400' : 'text-gray-600'}`}>{day}</span>
+                                                            {log && (
+                                                                <div className="mt-1 flex flex-col items-center">
+                                                                    <span className="font-bold text-indigo-600 text-sm leading-none">{log.hours}</span>
+                                                                    
+                                                                    {/* 5인 이상일 때: 시간 텍스트로 표시 (야간, 휴일) */}
+                                                                    {!isSmallBusiness ? (
+                                                                        <>
+                                                                            {log.nightHours > 0 && <span className="text-[8px] text-slate-500 leading-none mt-0.5">야{log.nightHours}</span>}
+                                                                            {log.isHoliday && <span className="text-[8px] text-red-500 leading-none mt-0.5">휴{log.hours}</span>}
+                                                                        </>
+                                                                    ) : (
+                                                                        /* 5인 미만일 때: 텍스트로 표시 변경 */
+                                                                        <div className="flex gap-0.5 mt-0.5">
+                                                                            {(log.isNight || log.nightHours > 0) && <span className="text-[8px] text-slate-500 leading-none">야</span>}
+                                                                            {log.isHoliday && <span className="text-[8px] text-red-500 leading-none">휴</span>}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                </Card>
+                            </>
+                        )}
+
+                        {isInputMode && (
+                            <Card className="p-4 space-y-4 border-indigo-100 shadow-md">
+                                <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                                    <button onClick={() => setIsInputMode(false)} className="text-gray-500 mr-2 p-1 rounded-full hover:bg-gray-100">
+                                        <ChevronLeft size={24} />
+                                    </button>
+                                    <span className="font-bold text-lg text-gray-800">{currentDate}</span>
+                                    {getLogForDay(new Date(currentDate).getDate()) ? (
+                                        <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full font-medium">기록 있음</span>
+                                    ) : (
+                                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">미입력</span>
+                                    )}
                                 </div>
 
-                                {isSmallBusiness ? (
-                                    <div className="flex gap-3 pt-2">
-                                        <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isNight ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                            <input type="checkbox" checked={isNight} onChange={toggleIsNight} className="hidden" />
-                                            <Moon size={16} />
-                                            <span className="font-bold text-sm">야간</span>
-                                        </label>
-                                        <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                            <input type="checkbox" checked={isHoliday} onChange={toggleIsHoliday} className="hidden" />
-                                            <Gift size={16} />
-                                            <span className="font-bold text-sm">휴일</span>
-                                        </label>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                                                <Moon size={12}/> 야간 근무 (22:00~06:00) 포함 시간
-                                            </label>
-                                            <div className="flex gap-2 items-center">
-                                                <div className="relative flex-1">
+                                <div className="space-y-4">
+                                    
+                                    {isSmallBusiness ? (
+                                        /* 5인 미만 입력 UI (기존) */
+                                        <>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-bold text-gray-500">총 근무 시간 (터치시 자동저장)</label>
+                                                <div className="flex gap-2">
+                                                    {[4, 5, 6, 7, 8].map(h => (
+                                                        <button key={h} onClick={() => handleHourChange(h)} className={`flex-1 py-3 rounded-xl text-sm border font-medium transition-colors ${parseFloat(hours) === h ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                                                            {h}시간
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="relative">
                                                     <input 
+                                                        ref={inputRef}
                                                         type="number" 
                                                         inputMode="decimal"
                                                         step="0.1"
-                                                        placeholder="야간 시간만 (예: 2)" 
-                                                        value={nightHours} 
-                                                        onChange={(e) => handleNightHourChange(e.target.value)}
+                                                        placeholder="직접 입력 (예: 8.5)" 
+                                                        value={hours} 
+                                                        onChange={(e) => handleHourChange(e.target.value)}
                                                         onKeyDown={handleKeyDown}
-                                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:outline-none"
+                                                        onFocus={(e) => e.target.select()} 
+                                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-lg font-bold text-gray-800"
                                                     />
                                                     <span className="absolute right-4 top-3.5 text-gray-400 text-sm">시간</span>
                                                 </div>
-                                                <button onClick={() => handleNightHourChange(Math.min(parseFloat(hours) || 0, 1))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">1H</button>
-                                                <button onClick={() => handleNightHourChange(Math.min(parseFloat(hours) || 0, 2))} className="px-3 py-3 border rounded-lg text-xs bg-white text-slate-600">2H</button>
                                             </div>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-200' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                                <input type="checkbox" checked={isHoliday} onChange={toggleIsHoliday} className="hidden" />
-                                                <Gift size={16} />
-                                                <span className="font-bold text-sm">휴일 (1.5배)</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
 
-                            {hasLog && (
-                                <Button 
-                                    onClick={deleteLog} 
-                                    variant="danger" 
-                                    className="w-full py-3 text-lg shadow-red-200 bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
-                                >
-                                    <Trash2 size={18} />
-                                    이 날짜 기록 삭제
+                                            <div className="flex gap-3 pt-2">
+                                                <button 
+                                                    onClick={toggleIsNight}
+                                                    className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${isNight ? 'bg-slate-800 border-slate-800 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                                >
+                                                    <Moon size={28} className="mb-1" />
+                                                    <span className="font-bold text-base">야간 근무</span>
+                                                </button>
+                                                <button 
+                                                    onClick={toggleIsHoliday}
+                                                    className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                                >
+                                                    <Gift size={28} className="mb-1" />
+                                                    <span className="font-bold text-base">휴일 근무</span>
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        /* 5인 이상 입력 UI (개선됨) */
+                                        <>
+                                            <div className="flex gap-3">
+                                                <div className="flex-1 flex flex-col gap-2">
+                                                    <label className="text-xs font-bold text-gray-500 flex items-center gap-1"><Sun size={14}/> 주간(일반)</label>
+                                                    <div className="relative">
+                                                        <input 
+                                                            ref={inputRef}
+                                                            type="number" 
+                                                            inputMode="decimal"
+                                                            step="0.1"
+                                                            placeholder="예: 5" 
+                                                            value={dayInput} 
+                                                            onChange={(e) => handleDayInputChange(e.target.value)}
+                                                            onKeyDown={handleKeyDown}
+                                                            onFocus={(e) => e.target.select()} 
+                                                            className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xl font-bold text-gray-800 text-center"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 flex flex-col gap-2">
+                                                    <label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Moon size={14}/> 야간(22~06시)</label>
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="number" 
+                                                            inputMode="decimal"
+                                                            step="0.1"
+                                                            placeholder="예: 3" 
+                                                            value={nightInput} 
+                                                            onChange={(e) => handleNightInputChange(e.target.value)}
+                                                            onKeyDown={handleKeyDown}
+                                                            onFocus={(e) => e.target.select()} 
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 focus:outline-none text-xl font-bold text-slate-800 text-center"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="text-center py-2 bg-indigo-50 rounded-lg text-indigo-700 font-bold border border-indigo-100">
+                                                총 근무 시간: {totalHoursDisplay}시간
+                                            </div>
+
+                                            <div className="flex gap-3 pt-2">
+                                                <button 
+                                                    onClick={toggleIsHoliday}
+                                                    className={`w-full flex items-center justify-center p-4 rounded-xl border-2 transition-all ${isHoliday ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                                >
+                                                    <Gift size={24} className="mr-2" />
+                                                    <span className="font-bold text-lg">휴일 근무 (1.5배)</span>
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-400 text-center">* 야간과 휴일이 겹치면 자동으로 2.0배 계산됩니다.</p>
+                                        </>
+                                    )}
+                                </div>
+
+                                <Button onClick={() => setIsInputMode(false)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 shadow-lg text-lg">
+                                    입력 완료
                                 </Button>
-                            )}
-                        </Card>
+
+                                {getLogForDay(new Date(currentDate).getDate()) && (
+                                    <Button 
+                                        onClick={deleteLog} 
+                                        variant="danger" 
+                                        className="w-full py-3 text-lg shadow-red-200 bg-red-50 text-red-500 border-red-100 hover:bg-red-100 mt-2"
+                                    >
+                                        <Trash2 size={18} />
+                                        삭제
+                                    </Button>
+                                )}
+                            </Card>
+                        )}
                     </div>
                 );
             };
