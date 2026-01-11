@@ -342,16 +342,19 @@
                         const total = existing.hours || 0;
                         const night = existing.nightHours || 0;
                         
-                        setHours(total);
-                        setNightHours(night);
+                        // Fix: 소수점 입력('0.')이 가능하도록, 현재 입력값과 DB값이 숫자적으로 같으면 덮어쓰지 않음
+                        setHours(prev => (parseFloat(prev) == total ? prev : total));
+                        setNightHours(prev => (parseFloat(prev) == night ? prev : night));
+                        
                         setIsNight(existing.isNight || false);
                         setIsHoliday(existing.isHoliday);
 
-                        // Set separated inputs
+                        // Set separated inputs (5인 이상 모드용)
                         if (!isSmallBusiness) {
                             const dayPart = parseFloat((total - night).toFixed(1));
-                            setDayInput(dayPart === 0 ? '' : dayPart);
-                            setNightInput(night === 0 ? '' : night);
+                            // 입력값 유지 로직 적용
+                            setDayInput(prev => (parseFloat(prev) == dayPart ? prev : (dayPart === 0 ? '' : dayPart)));
+                            setNightInput(prev => (parseFloat(prev) == night ? prev : (night === 0 ? '' : night)));
                         }
                     } else {
                         setHours('');
